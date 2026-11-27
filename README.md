@@ -86,5 +86,5 @@ simulated and has no personal information. The data files are not included here;
 
 ## Team
 
-Daksh Jadhav, Abdul Gaffar Nagori, Jamie McGillicuddy and Rajesh Yadav.
+Daksh Jadhav, Abdul Gaffar Nagori, Jamie McGillicuddy and Rajesh Yadav
 
