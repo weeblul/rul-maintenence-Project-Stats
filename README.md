@@ -15,7 +15,7 @@ reviewer approves invoices.
 | Linear regression | 21.12 | 21.09 |
 | Decision tree (depth 9) | 18.29 | 19.95 |
 
-Logistic regression (fail within 30 cycles): precision 0.81, recall 0.61. Full write-up: `report/report.pdf`.
+Logistic regression (fail within 30 cycles): precision 0.81, recall 0.61.
 
 ## How it works
 
