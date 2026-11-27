@@ -2,8 +2,6 @@
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/weeblul/rul-maintenence-Project-Stats/blob/main/RUL_project.ipynb)
 
-CSC1181/CSC1203 Machine Learning Project, DCU.
-
 We use NASA's C-MAPSS engine data (FD001 and FD003) to predict how many cycles an engine has left
 before it fails (RUL), and whether it will fail in the next 30 cycles. The models then feed a small
 pretend maintenance system: a simulator, three agents, an ERP database and a web dashboard where a
