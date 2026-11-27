@@ -67,7 +67,6 @@ pip install -r requirements.txt
 | `erp.py` | The ERP: SQLite database `erp.db` with inventory, suppliers, requisitions, work orders, predictions, audit log and invoices. Every other file goes through this file |
 | `app.py` | Small Flask web server that gives the dashboard its data and shows the printable invoices |
 | `dashboard.html` | The dashboard: maintenance queue, invoices (pending / posted) and requisitions waiting for approval |
-| `report/` | The report (PDF and LaTeX source) and its figures |
 | `figures/` | All plots from the notebook |
 
 The dashboard and simulator use the same `erp.db` file beside `erp.py`, regardless of the folder
