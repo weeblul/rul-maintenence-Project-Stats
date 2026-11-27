@@ -51,7 +51,7 @@ pip install -r requirements.txt
 1. Put the 6 data files in the `data` folder.
 2. Open `RUL_project.ipynb` in Jupyter and run all cells (the last cell starts the dashboard).
 3. Or, after running the notebook once, start the dashboard yourself with `python app.py`
-   and open http://localhost:5000.
+   and open http://127.0.0.1:5000.
 
 `python run_simulation.py` runs only the simulation again (it needs the models from the notebook).
 
