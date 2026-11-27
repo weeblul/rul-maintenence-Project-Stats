@@ -64,7 +64,6 @@ pip install -r requirements.txt
 | `predictor.py` | Loads the saved models and returns `(rul, risk)` for one engine |
 | `run_simulation.py` | The daily loop and the trigger (risk >= 0.7, once per engine) |
 | `agents.py` | Stock agent, procurement agent and scheduler agent |
-| `explain.py` | Writes the reason text for the audit log (uses Claude only if an API key is set, otherwise a simple sentence) |
 | `erp.py` | The ERP: SQLite database `erp.db` with inventory, suppliers, requisitions, work orders, predictions, audit log and invoices. Every other file goes through this file |
 | `app.py` | Small Flask web server that gives the dashboard its data and shows the printable invoices |
 | `dashboard.html` | The dashboard: maintenance queue, invoices (pending / posted) and requisitions waiting for approval |
