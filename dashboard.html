@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fleet Maintenance Dashboard</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #f4f6fa;
+      color: #142038;
+      font: 15px system-ui, sans-serif;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px max(20px, calc((100vw - 1160px) / 2));
+      background: #101d33;
+      color: white;
+    }
+
+    main { max-width: 1200px; margin: auto; padding: 26px 20px; }
+    h1 { font-size: clamp(32px, 5vw, 52px); margin: 0 0 4px; }
+    h2 { font-size: 20px; margin: 0 0 8px; }
+    p { color: #536178; line-height: 1.5; margin: 0 0 12px; }
+
+    .controls {
+      display: flex;
+      align-items: end;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 20px 0 12px;
+    }
+
+    label { display: grid; gap: 5px; font-size: 13px; color: #536178; }
+
+    input, select, button {
+      font: inherit;
+      color: inherit;
+      border: 1px solid #cbd5e2;
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: white;
+    }
+
+    button { cursor: pointer; }
+    button:focus-visible { outline: 2px solid #315ed3; outline-offset: 3px; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .card { text-align: left; padding: 14px; }
+    .card strong { display: block; font-size: 30px; }
+    .card[aria-pressed="true"] { border-color: #315ed3; box-shadow: inset 0 0 0 1px #315ed3; }
+
+    .layout { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+    .panel {
+      min-width: 0;
+      align-self: start;
+      background: white;
+      border: 1px solid #dce3ed;
+      border-radius: 12px;
+      padding: 18px;
+    }
+
+    .table-wrap { overflow: auto; max-height: 470px; }
+    table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #e7ebf1; }
+    th { position: sticky; top: 0; background: #eef2f8; font-size: 13px; }
+    tr.selected td { background: #edf3ff; }
+
+    .engine {
+      padding: 3px 0;
+      border: 0;
+      background: transparent;
+      font-weight: 700;
+      color: #254cb4;
+    }
+
+    .badge {
+      display: inline-block;
+      border-radius: 20px;
+      background: #edf1f6;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .badge.critical { background: #ffe7eb; color: #a9182a; }
+    .badge.soon { background: #fff0db; color: #854100; }
+    .badge.watch { background: #e8efff; color: #254cb4; }
+
+    .thresholds { display: grid; gap: 12px; margin-top: 16px; }
+    .thresholds input { accent-color: #315ed3; padding: 0; }
+    .notes { font-size: 13px; margin-top: 16px; }
+
+    /* invoices and requisitions panels */
+    .erp { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-top: 16px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    .tab[aria-selected="true"] { border-color: #315ed3; box-shadow: inset 0 0 0 1px #315ed3; font-weight: 650; }
+    .approve { background: #315ed3; border-color: #315ed3; color: white; }
+    .approve:disabled { opacity: 0.6; cursor: wait; }
+    .badge.pending { background: #fff0db; color: #854100; }
+    .badge.posted { background: #e3f6e8; color: #17672e; }
+    .empty { color: #536178; }
+
+    @media (max-width: 820px) {
+      .erp { grid-template-columns: 1fr; }
+      .layout { grid-template-columns: 1fr; }
+      .cards { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <strong>Fleet Maintenance</strong>
+    <span>NASA C-MAPSS · Simulation</span>
+  </header>
+
+  <main>
+    <h1>Maintenance signals</h1>
+    <p>Review engines in order of predicted remaining life.</p>
+
+    <div class="controls">
+      <label>
+        Fleet
+        <select id="fleet">
+          <option value="">All fleets</option>
+          <option>FD001</option>
+          <option>FD003</option>
+        </select>
+      </label>
+
+      <label>
+        Prediction model
+        <select id="model">
+          <option value="2">Decision tree</option>
+          <option value="3">Linear regression</option>
+        </select>
+      </label>
+
+      <label>
+        Find an engine
+        <input id="search" type="search" placeholder="e.g. FD001_18">
+      </label>
+    </div>
+
+    <p id="source-status" role="status">Loading predictions from the ERP...</p>
+    <div class="cards" id="cards" aria-label="Filter by maintenance signal"></div>
+
+    <div class="layout">
+      <section class="panel">
+        <h2>Maintenance queue</h2>
+        <p id="count" aria-live="polite"></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Engine</th>
+                <th scope="col">Signal</th>
+                <th scope="col">Cycles left</th>
+                <th scope="col">Planning action</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <h2 id="engine-title">Engine details</h2>
+        <p id="engine-detail" aria-live="polite"></p>
+        <p id="engine-action"></p>
+
+        <div class="thresholds">
+          <label>
+            Priority inspection at or below
+            <output id="urgent-label" for="urgent"></output>
+            <input id="urgent" type="range" min="1" max="29" value="15">
+          </label>
+
+          <label>
+            Plan inspection at or below
+            <output id="soon-label" for="soon"></output>
+            <input id="soon" type="range" min="16" max="59" value="30">
+          </label>
+        </div>
+
+        <p class="notes">
+          These signals use simulated remaining-life estimates.
+          Inspection findings determine whether a repair is needed.
+        </p>
+      </aside>
+    </div>
+
+    <div class="erp">
+      <section class="panel">
+        <h2>Invoices</h2>
+        <p>When a purchase is approved the supplier invoice arrives here as pending.
+           A reviewer approves it, the ERP posts it, and the invoice opens for printing.</p>
+        <div class="tabs" role="tablist">
+          <button type="button" class="tab" role="tab" data-tab="pending" aria-selected="true">Pending</button>
+          <button type="button" class="tab" role="tab" data-tab="posted" aria-selected="false">Posted</button>
+        </div>
+        <p id="invoice-status" role="status"></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Invoice</th>
+                <th scope="col">Engine</th>
+                <th scope="col">Supplier</th>
+                <th scope="col">Amount (EUR)</th>
+                <th scope="col">Status</th>
+                <th scope="col"></th>
+              </tr>
+            </thead>
+            <tbody id="invoice-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <h2>Requisitions waiting for approval</h2>
+        <p>Orders above the 50,000 euro limit need a person to approve them before the supplier invoices us.</p>
+        <div id="requisitions"></div>
+      </aside>
+    </div>
+  </main>
+
+  <script>
+    // Each row is [engine ID, actual RUL, tree prediction, linear prediction].
+    // The rows come from the ERP (model_predictions table) through app.py.
+    let engines = [];
+
+    const get = id => document.getElementById(id);
+
+    const signals = {
+      all: { label: "All engines" },
+      critical: { label: "Priority inspection", action: "Review first" },
+      soon: { label: "Plan inspection", action: "Reserve inspection capacity" },
+      watch: { label: "Watchlist", action: "Monitor the next reading" },
+      routine: { label: "Routine", action: "Continue monitoring" }
+    };
+
+    let filter = "all";
+    let selectedId = null;
+
+    const prediction = engine => engine[Number(get("model").value)];
+
+    function signalFor(engine) {
+      const cycles = prediction(engine);
+      if (cycles <= Number(get("urgent").value)) return "critical";
+      if (cycles <= Number(get("soon").value)) return "soon";
+      if (cycles <= 60) return "watch";
+      return "routine";
+    }
+
+    function render() {
+      const urgent = Number(get("urgent").value);
+      const soon = Number(get("soon").value);
+
+      // Keep the two inspection thresholds in order.
+      get("urgent").max = soon - 1;
+      get("soon").min = urgent + 1;
+      get("urgent-label").textContent = urgent + " cycles";
+      get("soon-label").textContent = soon + " cycles";
+
+      const fleet = engines.filter(engine => engine[0].startsWith(get("fleet").value));
+      const counts = { all: fleet.length, critical: 0, soon: 0, watch: 0, routine: 0 };
+
+      for (const engine of fleet) {
+        counts[signalFor(engine)]++;
+      }
+
+      const ranges = {
+        all: "Selected fleet",
+        critical: "≤ " + urgent + " cycles",
+        soon: "> " + urgent + " to " + soon + " cycles",
+        watch: "> " + soon + " to 60 cycles",
+        routine: "> 60 cycles"
+      };
+
+      get("cards").innerHTML = Object.keys(signals).map(key => `
+        <button type="button" class="card" data-filter="${key}"
+                aria-pressed="${filter === key}">
+          ${signals[key].label}
+          <strong>${counts[key]}</strong>
+          <small>${ranges[key]}</small>
+        </button>
+      `).join("");
+
+      const search = get("search").value.trim().toLowerCase();
+      const visible = fleet
+        .filter(engine => engine[0].toLowerCase().includes(search))
+        .filter(engine => filter === "all" || signalFor(engine) === filter)
+        .sort((a, b) => prediction(a) - prediction(b));
+
+      const selected = visible.find(engine => engine[0] === selectedId) ?? visible[0];
+      selectedId = selected?.[0] ?? null;
+      get("count").textContent = `${visible.length} of ${fleet.length} engines`;
+
+      // Imported IDs are validated before any are inserted into the table.
+      get("rows").innerHTML = visible.map(engine => {
+        const id = engine[0];
+        const tier = signalFor(engine);
+        const isSelected = id === selectedId;
+
+        return `
+          <tr class="${isSelected ? "selected" : ""}">
+            <td>
+              <button type="button" class="engine" data-engine="${id}"
+                      aria-pressed="${isSelected}">${id}</button>
+            </td>
+            <td><span class="badge ${tier}">${signals[tier].label}</span></td>
+            <td>${prediction(engine).toFixed(1)}</td>
+            <td>${signals[tier].action}</td>
+          </tr>
+        `;
+      }).join("") || '<tr><td colspan="4">No engines match these filters.</td></tr>';
+
+      showDetails(selected);
+    }
+
+    function showDetails(engine) {
+      if (!engine) {
+        get("engine-title").textContent = "Engine details";
+        get("engine-detail").textContent = "Select an engine from the queue.";
+        get("engine-action").textContent = "";
+        return;
+      }
+
+      const predicted = prediction(engine);
+      const actual = engine[1];
+      const error = predicted - actual;
+      const signedError = (error > 0 ? "+" : "") + error.toFixed(1);
+
+      get("engine-title").textContent = engine[0];
+      get("engine-detail").textContent =
+        `Predicted ${predicted.toFixed(1)} cycles left · Actual ${actual} cycles ` +
+        `in test data · Prediction error ${signedError} cycles.`;
+      get("engine-action").textContent = signals[signalFor(engine)].action;
+    }
+
+    get("cards").addEventListener("click", event => {
+      const button = event.target.closest("[data-filter]");
+      if (!button) return;
+
+      filter = filter === button.dataset.filter ? "all" : button.dataset.filter;
+      render();
+      get("cards").querySelector(`[data-filter="${button.dataset.filter}"]`).focus();
+    });
+
+    get("rows").addEventListener("click", event => {
+      const button = event.target.closest("[data-engine]");
+      if (!button) return;
+
+      selectedId = button.dataset.engine;
+      render();
+      get("rows").querySelector(`[data-engine="${selectedId}"]`).focus();
+    });
+
+    for (const id of ["fleet", "model"]) {
+      get(id).addEventListener("change", render);
+    }
+
+    for (const id of ["search", "urgent", "soon"]) {
+      get(id).addEventListener("input", render);
+    }
+
+    // Load the 200 test engines from the ERP (same checks as before).
+    async function loadEngines() {
+      try {
+        const response = await fetch("api/engines");
+        const rows = await response.json();
+
+        const valid = Array.isArray(rows) && rows.length > 0 && rows.every(row =>
+          Array.isArray(row) &&
+          typeof row[0] === "string" &&
+          /^FD00[13]_[1-9]\d*$/.test(row[0]) &&
+          [row[1], row[2], row[3]].every(value =>
+            Number.isFinite(value) && value >= 0 && value <= 125
+          )
+        );
+
+        if (!valid || new Set(rows.map(row => row[0])).size !== rows.length) {
+          throw new Error("Invalid prediction data");
+        }
+
+        engines = rows;
+        get("source-status").textContent = `Loaded ${engines.length} test engines from the ERP.`;
+      } catch {
+        engines = [];
+        get("source-status").textContent =
+          "No predictions in the ERP yet. Run the notebook to the end, then reload this page.";
+      }
+      render();
+    }
+
+    // ---------- invoices ----------
+    let invoiceTab = "pending";
+    let invoices = { pending: [], posted: [] };
+
+    // put text safely into the page (stops HTML in the data from running)
+    function safe(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function euro(amount) {
+      return Number(amount).toLocaleString("en-IE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    async function loadInvoices() {
+      try {
+        const response = await fetch("api/invoices");
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+        invoices = data;
+        get("invoice-status").textContent =
+          `${invoices.pending.length} pending · ${invoices.posted.length} posted`;
+      } catch {
+        invoices = { pending: [], posted: [] };
+        get("invoice-status").textContent = "No ERP data yet. Run the notebook to the end first.";
+      }
+      renderInvoices();
+    }
+
+    function renderInvoices() {
+      for (const tab of document.querySelectorAll(".tab")) {
+        tab.setAttribute("aria-selected", tab.dataset.tab === invoiceTab);
+      }
+
+      const list = invoices[invoiceTab];
+      get("invoice-rows").innerHTML = list.map(inv => `
+        <tr>
+          <td>INV-${String(inv.invoice_id).padStart(4, "0")}</td>
+          <td>${safe(inv.engine)}</td>
+          <td>${safe(inv.supplier_name)}</td>
+          <td>${euro(inv.amount)}</td>
+          <td><span class="badge ${inv.status}">${safe(inv.status)}</span></td>
+          <td>${inv.status === "pending"
+            ? `<button type="button" class="approve" data-invoice="${inv.invoice_id}">Approve and post</button>`
+            : `<a href="invoice/${inv.invoice_id}" target="_blank" rel="noopener">Open / print</a>`}</td>
+        </tr>
+      `).join("") || `<tr><td colspan="6" class="empty">No ${invoiceTab} invoices.</td></tr>`;
+    }
+
+    get("invoice-rows").addEventListener("click", async event => {
+      const button = event.target.closest("[data-invoice]");
+      if (!button) return;
+      const id = button.dataset.invoice;
+      button.disabled = true;
+
+      // open the new tab straight away (inside the click), otherwise the browser may block the pop-up
+      const invoiceTabWindow = window.open("", "_blank");
+
+      try {
+        const response = await fetch(`api/invoices/${id}/approve`, { method: "POST" });
+        const result = await response.json();
+        if (!result.ok) throw new Error(result.error);
+
+        if (invoiceTabWindow) {
+          // full address, so the new tab finds the page
+          invoiceTabWindow.location = new URL(`invoice/${id}`, document.baseURI).href;
+        } else {
+          get("invoice-status").innerHTML =
+            `Invoice ${id} posted. <a href="invoice/${id}" target="_blank" rel="noopener">Open it to print</a>`;
+        }
+        invoiceTab = "posted";
+      } catch (error) {
+        if (invoiceTabWindow) invoiceTabWindow.close();
+        alert("Could not post the invoice: " + error.message);
+      }
+      await loadInvoices();
+    });
+
+    document.querySelector(".tabs").addEventListener("click", event => {
+      const tab = event.target.closest("[data-tab]");
+      if (!tab) return;
+      invoiceTab = tab.dataset.tab;
+      renderInvoices();
+    });
+
+    // ---------- requisitions waiting for a person ----------
+    async function loadRequisitions() {
+      let list = [];
+      try {
+        const response = await fetch("api/requisitions");
+        const data = await response.json();
+        if (Array.isArray(data)) list = data;
+      } catch {
+        list = [];
+      }
+
+      get("requisitions").innerHTML = list.map(pr => `
+        <p>
+          <strong>PR ${pr.pr_id}</strong> · ${safe(pr.engine)} · ${safe(pr.supplier_name)}<br>
+          EUR ${euro(pr.total_cost)} (day ${pr.day})<br>
+          <button type="button" class="approve" data-pr="${pr.pr_id}">Approve purchase</button>
+        </p>
+      `).join("") || '<p class="empty">Nothing waiting for approval.</p>';
+    }
+
+    get("requisitions").addEventListener("click", async event => {
+      const button = event.target.closest("[data-pr]");
+      if (!button) return;
+      button.disabled = true;
+      const response = await fetch(`api/requisitions/${button.dataset.pr}/approve`, { method: "POST" });
+      const result = await response.json();
+      if (!result.ok) alert("Could not approve: " + result.error);
+      invoiceTab = "pending";
+      await loadRequisitions();
+      await loadInvoices();
+    });
+
+    render();
+    loadEngines();
+    loadInvoices();
+    loadRequisitions();
+  </script>
+</body>
+</html>

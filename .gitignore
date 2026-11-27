@@ -1,0 +1,18 @@
+# made when you run the project
+erp.db
+models/*.pkl
+__pycache__/
+.ipynb_checkpoints/
+results_table.csv
+error_by_band.csv
+
+# NASA data (download it yourself, see data/README.txt)
+data/*.txt
+!data/README.txt
+data/*.zip
+
+# LaTeX build files and Mac files
+report/*.aux
+report/*.log
+report/*.out
+.DS_Store
