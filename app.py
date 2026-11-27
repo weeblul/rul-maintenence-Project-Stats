@@ -1,7 +1,6 @@
 # Layer 5: a small Flask web server for the dashboard.
 # The browser can't open erp.db by itself, so this server reads the ERP (through erp.py)
 # and sends the data to dashboard.html.
-#
 # Start it with:  python app.py   then open http://127.0.0.1:5000
 # (In Colab the last cell of the notebook starts it and gives you a link.)
 
