@@ -87,4 +87,4 @@ simulated and has no personal information. The data files are not included here;
 ## Team
 
 Daksh Jadhav, Abdul Gaffar Nagori, Jamie McGillicuddy and Rajesh Yadav.
-Who did what is in the contribution table in `report/report.pdf`.
+
