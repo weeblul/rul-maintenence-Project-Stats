@@ -71,6 +71,10 @@ pip install -r requirements.txt
 | `report/` | The report (PDF and LaTeX source) and its figures |
 | `figures/` | All plots from the notebook |
 
+The dashboard and simulator use the same `erp.db` file beside `erp.py`, regardless of the folder
+from which you start them. The dashboard shows whether the database is connected and initialized;
+run the notebook to create the ERP tables and populate model predictions before using the live data.
+
 ## Made-up demo data
 
 The stock (3 spare modules), the two suppliers and their prices, the routine work orders and the invoices

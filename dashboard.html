@@ -155,6 +155,7 @@
       </label>
     </div>
 
+    <p id="database-status" role="status">Checking the SQLite ERP connection...</p>
     <p id="source-status" role="status">Loading predictions from the ERP...</p>
     <div class="cards" id="cards" aria-label="Filter by maintenance signal"></div>
 
@@ -233,6 +234,7 @@
       <aside class="panel">
         <h2>Requisitions waiting for approval</h2>
         <p>Orders above the 50,000 euro limit need a person to approve them before the supplier invoices us.</p>
+        <p id="requisition-status" role="status">Loading requisitions...</p>
         <div id="requisitions"></div>
       </aside>
     </div>
@@ -352,6 +354,22 @@
       get("engine-action").textContent = signals[signalFor(engine)].action;
     }
 
+    async function loadDatabaseStatus() {
+      try {
+        const response = await fetch("api/status");
+        const status = await response.json();
+        if (!response.ok) throw new Error(status.error || "Could not check the database.");
+
+        get("database-status").textContent = !status.connected
+          ? "SQLite ERP database not found. Run the notebook to initialize it."
+          : !status.initialized
+            ? "SQLite ERP database is present but not initialized. Run the notebook first."
+            : `Connected to SQLite ERP · ${status.predictions} saved engine predictions.`;
+      } catch (error) {
+        get("database-status").textContent = `Database connection check failed: ${error.message}`;
+      }
+    }
+
     get("cards").addEventListener("click", event => {
       const button = event.target.closest("[data-filter]");
       if (!button) return;
@@ -383,25 +401,33 @@
       try {
         const response = await fetch("api/engines");
         const rows = await response.json();
+        if (!response.ok) throw new Error(rows.error || "Could not load predictions.");
 
-        const valid = Array.isArray(rows) && rows.length > 0 && rows.every(row =>
+        if (!Array.isArray(rows)) throw new Error("Invalid prediction data");
+        if (rows.length === 0) {
+          engines = [];
+          get("source-status").textContent =
+            "No engine predictions saved yet. Run the notebook to generate dashboard data.";
+        } else {
+          const valid = rows.every(row =>
           Array.isArray(row) &&
           typeof row[0] === "string" &&
           /^FD00[13]_[1-9]\d*$/.test(row[0]) &&
           [row[1], row[2], row[3]].every(value =>
             Number.isFinite(value) && value >= 0 && value <= 125
           )
-        );
+          );
 
-        if (!valid || new Set(rows.map(row => row[0])).size !== rows.length) {
-          throw new Error("Invalid prediction data");
+          if (!valid || new Set(rows.map(row => row[0])).size !== rows.length) {
+            throw new Error("Invalid prediction data");
+          }
+
+          engines = rows;
+          get("source-status").textContent = `Loaded ${engines.length} test engines from the ERP.`;
         }
-
-        engines = rows;
-        get("source-status").textContent = `Loaded ${engines.length} test engines from the ERP.`;
-      } catch {
+      } catch (error) {
         engines = [];
-        get("source-status").textContent =
+        get("source-status").textContent = error.message ||
           "No predictions in the ERP yet. Run the notebook to the end, then reload this page.";
       }
       render();
@@ -430,9 +456,9 @@
         invoices = data;
         get("invoice-status").textContent =
           `${invoices.pending.length} pending · ${invoices.posted.length} posted`;
-      } catch {
+      } catch (error) {
         invoices = { pending: [], posted: [] };
-        get("invoice-status").textContent = "No ERP data yet. Run the notebook to the end first.";
+        get("invoice-status").textContent = `Could not load invoices: ${error.message}`;
       }
       renderInvoices();
     }
@@ -496,36 +522,48 @@
     // ---------- requisitions waiting for a person ----------
     async function loadRequisitions() {
       let list = [];
+      let loadError = false;
       try {
         const response = await fetch("api/requisitions");
         const data = await response.json();
-        if (Array.isArray(data)) list = data;
-      } catch {
-        list = [];
+        if (!response.ok || !Array.isArray(data)) {
+          throw new Error(data.error || "Unexpected response from the ERP.");
+        }
+        list = data;
+        get("requisition-status").textContent = `${list.length} waiting for approval.`;
+      } catch (error) {
+        loadError = true;
+        get("requisition-status").textContent = `Could not load requisitions: ${error.message}`;
       }
-
       get("requisitions").innerHTML = list.map(pr => `
         <p>
           <strong>PR ${pr.pr_id}</strong> · ${safe(pr.engine)} · ${safe(pr.supplier_name)}<br>
           EUR ${euro(pr.total_cost)} (day ${pr.day})<br>
           <button type="button" class="approve" data-pr="${pr.pr_id}">Approve purchase</button>
         </p>
-      `).join("") || '<p class="empty">Nothing waiting for approval.</p>';
+      `).join("") || `<p class="empty">${loadError
+        ? "Requisitions are unavailable."
+        : "Nothing waiting for approval."}</p>`;
     }
 
     get("requisitions").addEventListener("click", async event => {
       const button = event.target.closest("[data-pr]");
       if (!button) return;
       button.disabled = true;
-      const response = await fetch(`api/requisitions/${button.dataset.pr}/approve`, { method: "POST" });
-      const result = await response.json();
-      if (!result.ok) alert("Could not approve: " + result.error);
+      try {
+        const response = await fetch(`api/requisitions/${button.dataset.pr}/approve`, { method: "POST" });
+        const result = await response.json();
+        if (!response.ok || !result.ok) throw new Error(result.error || "Unexpected response from the ERP.");
+      } catch (error) {
+        alert("Could not approve: " + error.message);
+      }
       invoiceTab = "pending";
       await loadRequisitions();
       await loadInvoices();
     });
 
     render();
+    loadDatabaseStatus();
     loadEngines();
     loadInvoices();
     loadRequisitions();

@@ -12,8 +12,6 @@ import erp
 
 app = Flask(__name__)
 HERE = os.path.dirname(os.path.abspath(__file__))
-# always use the erp.db next to this file, even if the server is started from another folder
-erp.DB_FILE = os.path.join(HERE, "erp.db")
 
 
 # the dashboard page
@@ -22,15 +20,27 @@ def home():
     return send_file(os.path.join(HERE, "dashboard.html"))
 
 
+@app.route("/api/status")
+def database_status():
+    return jsonify(erp.get_database_status())
+
+
 # the 200 test engines: [engine, actual RUL, tree prediction, linear prediction]
 @app.route("/api/engines")
 def engines():
-    return jsonify(erp.get_model_predictions())
+    if not erp.get_database_status()["initialized"]:
+        return jsonify({"error": "ERP database is not initialized. Run the notebook first."}), 503
+    try:
+        return jsonify(erp.get_model_predictions())
+    except sqlite3.OperationalError:
+        return jsonify({"error": "ERP database is not initialized. Run the notebook first."}), 503
 
 
 # pending and posted invoices
 @app.route("/api/invoices")
 def invoices():
+    if not erp.get_database_status()["initialized"]:
+        return jsonify({"error": "ERP database is not initialized. Run the notebook first."}), 503
     try:
         return jsonify({"pending": erp.get_pending_invoices(), "posted": erp.get_posted_invoices()})
     except sqlite3.OperationalError:
@@ -51,6 +61,8 @@ def approve_invoice(invoice_id):
 # requisitions over the cost limit that wait for a person
 @app.route("/api/requisitions")
 def requisitions():
+    if not erp.get_database_status()["initialized"]:
+        return jsonify({"error": "ERP database is not initialized. Run the notebook first."}), 503
     try:
         return jsonify(erp.get_pending_requisitions_with_names())
     except sqlite3.OperationalError:

@@ -1,12 +1,44 @@
 #Layer 4: ERP system stored in a SQLite database (erp.db). All other files read and write the database only through this file
+import os
 import sqlite3
 from datetime import datetime
 
-DB_FILE = "erp.db"
+DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "erp.db")
 
 def connect():
     #open the database file (SQLite creates it if it doesn't exist)
     return sqlite3.connect(DB_FILE)
+
+
+def get_database_status():
+    if not os.path.exists(DB_FILE):
+        return {"connected": False, "initialized": False, "predictions": 0}
+
+    conn = connect()
+    try:
+        tables = {
+            row[0] for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        required_tables = {
+            "inventory", "suppliers", "purchase_requisitions", "work_orders",
+            "predictions", "audit_log", "invoices", "model_predictions",
+        }
+        initialized = required_tables.issubset(tables)
+        prediction_count = 0
+        if "model_predictions" in tables:
+            prediction_count = conn.execute(
+                "SELECT COUNT(*) FROM model_predictions"
+            ).fetchone()[0]
+        return {
+            "connected": True,
+            "initialized": initialized,
+            "predictions": prediction_count,
+        }
+    finally:
+        conn.close()
+
 
 def create_database():
     conn = connect()
@@ -300,7 +332,6 @@ def save_model_predictions(engines, actual, tree_pred, linear_pred):
 #used by the dashboard table: [engine, actual RUL, tree prediction, linear prediction]
 def get_model_predictions():
     conn = connect()
-    conn.execute("CREATE TABLE IF NOT EXISTS model_predictions (engine TEXT, actual_rul REAL, tree_pred REAL, linear_pred REAL)")
     rows = conn.execute("SELECT engine, actual_rul, tree_pred, linear_pred FROM model_predictions").fetchall()
     conn.close()
     result = []
